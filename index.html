@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<head>
+    <meta charset="UTF-8">
+    <title>WASM Osvetljenje Filter</title>
+    <style>
+        
+        .container {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .canvas-box {
+            text-align: center;
+            border: 1px solid #ccc;
+            padding: 10px;
+        }
+        #originalCanvas, #negativeCanvas {
+            max-width: 100%;
+            height: auto;
+            display: none;
+        }
+        #paramValueDisplay {
+            font-weight: bold;
+            color: green; 
+        }
+    </style>
+</head>
+<body>
+
+    <h1>WASM Osvetljenje Filter (C kod)</h1>
+
+    <div class="controls">
+        <label for="imageUpload">Priložite sliku:</label>
+        <input type="file" id="imageUpload" accept="image/*">
+    </div>
+
+    <div class="controls" style="margin-top: 15px;">
+        <label for="brightnessParam">Parametar Osvetljenja [-50 do +50]:</label>
+        <input type="range" id="brightnessParam" min="-50" max="50" value="0" step="1">
+        <span id="paramValueDisplay">0</span>
+    </div>
+
+    <div class="container">
+        <div class="canvas-box">
+            <h2>Originalna slika</h2>
+            <canvas id="originalCanvas"></canvas>
+        </div>
+        <div class="canvas-box">
+            <h2>Slika (Osvetljenje - WASM)</h2>
+            <canvas id="negativeCanvas"></canvas>
+        </div>
+    </div>
+
+    <script src="brightness_filter.js"></script> 
+    
+    <script>
+
+        var Module = Module || {}; 
+        
+        let wasm_apply_filter = null;
+        let originalImage = new Image();
+        let isWasmReady = false; // ZASTAVICA ZA REŠAVANJE Module._malloc GREŠKE
+
+        // Dohvatanje HTML elemenata
+        const imageUpload = document.getElementById('imageUpload');
+        const brightnessParamRange = document.getElementById('brightnessParam');
+        const paramValueDisplay = document.getElementById('paramValueDisplay');
+        const originalCanvas = document.getElementById('originalCanvas');
+        const negativeCanvas = document.getElementById('negativeCanvas'); 
+        
+        const originalCtx = originalCanvas.getContext('2d');
+        const negativeCtx = negativeCanvas.getContext('2d');
+
+        // WASM INICIJALIZACIJA
+        // Ova funkcija se poziva kada je WASM modul u potpunosti učitan.
+        Module.onRuntimeInitialized = function() {
+            // Mapiranje C funkcije: 'apply_brightness_filter'
+            wasm_apply_filter = Module.cwrap('apply_brightness_filter', null, ['number', 'number', 'number']);
+            
+            isWasmReady = true; 
+            console.log("WASM modul za osvetljenje je spreman.");
+            
+            // Proveri da li slika čeka na obradu
+            if (originalImage.complete && originalImage.src) {
+                 applyBrightnessFilterWASM(); 
+            }
+        };
+
+        //Funkcija za primenu filtera (Poziva WASM)    
+        function applyBrightnessFilterWASM() {
+            //Izvršava se samo kada je WASM spreman
+            if (!originalImage.src || !isWasmReady) {
+                return;
+            }
+
+            const width = originalImage.width;
+            const height = originalImage.height;
+            
+            const param = parseInt(brightnessParamRange.value);
+            paramValueDisplay.textContent = param;
+
+            //Iscrtaj original na kanvasu za manipulaciju
+            negativeCtx.drawImage(originalImage, 0, 0, width, height);
+            
+            //Dohvatanje podataka piksela iz kanvasa
+            let imageData = negativeCtx.getImageData(0, 0, width, height);
+            let data = imageData.data; 
+            const num_bytes = data.length;
+
+            //Alokacija memorije u WASM HEAP-u
+            const ptr = Module._malloc(num_bytes);
+            // Kopiranje podataka iz JS-a u WASM memoriju
+            Module.HEAPU8.set(data, ptr);
+
+            //POZIVANJE C FUNKCIJE PREKO WASM-a
+            wasm_apply_filter(ptr, num_bytes, param);
+
+            //PREBACIVANJE REZULTATA NAZAD
+            // Čitanje obrađenih podataka iz WASM memorije
+            const processed_data = new Uint8ClampedArray(
+                Module.HEAPU8.subarray(ptr, ptr + num_bytes)
+            );
+
+            //AŽURIRANJE CANVAS-a
+            imageData.data.set(processed_data); 
+            negativeCtx.putImageData(imageData, 0, 0);
+
+            //OSLOBAĐANJE MEMORIJE
+            Module._free(ptr);
+        }
+
+        //Rukovanje prilaganjem slike
+        imageUpload.addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    originalImage.onload = function() {
+                        // Postavljanje dimenzija kanvasa
+                        const width = originalImage.width;
+                        const height = originalImage.height;
+
+                        originalCanvas.width = width;
+                        originalCanvas.height = height;
+                        negativeCanvas.width = width;
+                        negativeCanvas.height = height;
+
+                        // Iscrtavanje originala
+                        originalCtx.drawImage(originalImage, 0, 0, width, height);
+                        
+                        // Prikaz kanvasa
+                        originalCanvas.style.display = 'block';
+                        negativeCanvas.style.display = 'block';
+                        
+                        // Resetovanje parametra na 0 i primena filtera (čekajući na WASM)
+                        brightnessParamRange.value = 0;
+                        applyBrightnessFilterWASM();
+                    };
+                    originalImage.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        //Reagovanje na promenu parametra (skale)
+        brightnessParamRange.addEventListener('input', applyBrightnessFilterWASM);
+        
+        //Inicijalno postavljanje prikaza vrednosti
+        paramValueDisplay.textContent = brightnessParamRange.value;
+
+    </script>
+    <script async type="text/javascript" src="index.js"></script>
+</body>
+</html>
