@@ -1,29 +1,31 @@
-# Obrada slike (Brightness Filter) - WebAssembly
+# Image Processing (Brightness Filter) - WebAssembly
 
-Ovaj projekat omogućava promenu osvetljenja (brightness) na učitanoj slici u realnom vremenu. Obrada piksela se vrši unutar **WebAssembly** modula napisanog u jeziku **C**, što omogućava brzu manipulaciju velikim nizovima podataka (pikselima).
+This project enables real-time brightness adjustment on an uploaded image. Pixel processing is performed within a **WebAssembly** module written in **C**, allowing for high-speed manipulation of large data arrays (pixels).
 
-## 📝 Opis zadatka
-Korisnik prilaže sliku sa svog uređaja i pomoću parametra (input polje ili slider) zadaje vrednost za promenu osvetljenja. Program uzima originalne RGB vrednosti svakog piksela i modifikuje ih u C-u.
+## 📝 Task Overview
+The user uploads an image from their device and specifies a brightness value using a parameter (input field or slider). The program takes the original RGB values of each pixel and modifies them in C.
 
 
 
-## 🛠 Tehnologije i alati
-- **Jezik:** C (za matematičku obradu piksela)
-- **Biblioteke:** `stdint.h`, `stddef.h` (za rad sa tipovima podataka i memorijom)
+## 🛠 Technologies & Tools
+- **Language:** C (for mathematical pixel processing)
+- **Libraries:** `stdint.h`, `stddef.h` (for data types and memory management)
 - **Runtime:** WebAssembly + JavaScript (Canvas API)
 - **Server:** XAMPP (Apache)
 
-## ⚙️ Kako funkcionira obrada?
-1. **JavaScript:** Dohvata podatke o pikselima sa Canvas-a koristeći `getImageData`.
-2. **Memorija:** Podaci se prebacuju u Wasm memoriju koristeći `HEAPU8`.
-3. **C funkcija:** - Prima pokazivač na podatke.
-    - Prolazi kroz svaki piksel (R, G, B kanali).
-    - Dodaje zadatu vrednost parametra na svaku boju.
-    - Koristi pomoćnu funkciju za ograničavanje vrednosti u opsegu od **0 do 255**.
-4. **Prikaz:** Modifikovani podaci se vraćaju na Canvas i prikazuju korisniku.
+## ⚙️ How the Processing Works
+1. **JavaScript:** Fetches pixel data from the Canvas using `getImageData`.
+2. **Memory:** Data is transferred to the Wasm linear memory using `HEAPU8`.
+3. **C Function:** - Receives a pointer to the data buffer.
+    - Iterates through each pixel (R, G, B channels).
+    - Adds the specified parameter value to each color component.
+    - Uses a helper function to clamp the values within the **0 to 255** range.
+4. **Rendering:** Modified data is sent back to the Canvas and displayed to the user.
 
-## 💻 Komanda za kompajliranje
-Kompajliranje je izvršeno putem Emscripten terminala:
+
+
+## 💻 Compilation Command
+Compilation is performed via the Emscripten terminal:
 
 ```bash
 emcc source.c -o index.html --shell-file template.html -s EXPORTED_FUNCTIONS=[_apply_filter,_malloc,_free] -s EXPORTED_RUNTIME_METHODS=[ccall,cwrap]
